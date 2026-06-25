@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Painel do Motorista</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#13161B">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ TOPBAR ============ -->
+  <div class="topbar">
+    <div>
+      <div class="eyebrow" id="topbar-eyebrow">Painel</div>
+      <h1 id="topbar-title">Visão geral</h1>
+    </div>
+    <div class="odo mono" id="topbar-odo"></div>
+  </div>
+
+  <!-- ============ SCREEN: PAINEL (dashboard com 4 abas) ============ -->
+  <div class="screen active" id="screen-painel">
+
+    <div class="tabs" id="period-tabs">
+      <button class="tab" data-period="diaria">Diária</button>
+      <button class="tab" data-period="semanal">Semanal</button>
+      <button class="tab active" data-period="mensal">Mensal</button>
+      <button class="tab" data-period="anual">Anual</button>
+    </div>
+
+    <div id="period-nav" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <button class="btn-ghost btn" style="width:auto;padding:8px 12px;" id="period-prev">‹</button>
+      <div class="mono" id="period-label" style="font-weight:700;font-size:14px;color:var(--text-dim);"></div>
+      <button class="btn-ghost btn" style="width:auto;padding:8px 12px;" id="period-next">›</button>
+    </div>
+
+    <div class="card hero-balance">
+      <div class="label">Lucro líquido</div>
+      <div class="value display" id="hero-lucro">R$ 0,00</div>
+      <div class="sub" id="hero-sub">—</div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric">
+        <div class="label">Faturamento</div>
+        <div class="value green mono" id="m-faturamento">R$ 0,00</div>
+      </div>
+      <div class="metric">
+        <div class="label">Despesas</div>
+        <div class="value red mono" id="m-despesas">R$ 0,00</div>
+      </div>
+      <div class="metric">
+        <div class="label">Km rodados</div>
+        <div class="value mono" id="m-km">0 km</div>
+      </div>
+      <div class="metric">
+        <div class="label">Corridas</div>
+        <div class="value mono" id="m-corridas">0</div>
+      </div>
+      <div class="metric">
+        <div class="label">Ganho / km</div>
+        <div class="value gold mono" id="m-ganhokm">R$ 0,00</div>
+      </div>
+      <div class="metric">
+        <div class="label">Ganho / hora</div>
+        <div class="value gold mono" id="m-ganhohora">R$ 0,00</div>
+      </div>
+    </div>
+
+    <div class="card" id="card-donut" style="margin-top:14px;">
+      <div class="card-title">Faturamento × Despesas</div>
+      <div class="chart-wrap"><canvas id="chart-donut" height="220"></canvas></div>
+      <div class="chart-legend" id="legend-donut"></div>
+    </div>
+
+    <div class="card" id="card-apps">
+      <div class="card-title">Por aplicativo</div>
+      <div class="app-list" id="app-breakdown"></div>
+    </div>
+
+    <div id="empty-painel" class="empty-state" style="display:none;">
+      <div class="ico">📋</div>
+      <div class="msg">Nenhum lançamento neste período ainda.<br>Toque em "Lançar" para começar.</div>
+    </div>
+
+  </div>
+
+  <!-- ============ SCREEN: LANÇAR ============ -->
+  <div class="screen" id="screen-lancar">
+
+    <div class="tabs">
+      <button class="tab active" data-form="ganho">Ganho</button>
+      <button class="tab" data-form="despesa">Despesa</button>
+    </div>
+
+    <!-- FORM GANHO -->
+    <form id="form-ganho">
+      <div class="field">
+        <label>Data</label>
+        <input type="date" id="g-data" required>
+      </div>
+
+      <div class="section-title">Por aplicativo</div>
+      <div class="helper-text">Informe o que cada app mostrou: valor ganho e km que ele contabilizou (geralmente só o trecho com passageiro).</div>
+
+      <div id="ganho-apps-list"></div>
+
+      <div class="section-title">Km real rodado (opcional)</div>
+      <div class="helper-text">Inclua aqui o total de km rodados de verdade — contando deslocamento até o passageiro e tempo rodando sem corrida pra se posicionar. Isso calcula seu ganho/km real, sem o "embelezamento" do app.</div>
+      <div class="field">
+        <label>Km real total no dia</label>
+        <input type="number" inputmode="decimal" step="0.1" id="g-km-real" placeholder="Ex: 480">
+      </div>
+
+      <div class="field">
+        <label>Horas trabalhadas no dia (opcional)</label>
+        <input type="number" inputmode="decimal" step="0.1" id="g-horas" placeholder="Ex: 8.5">
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="margin-top:6px;">Salvar ganhos do dia</button>
+    </form>
+
+    <!-- FORM DESPESA -->
+    <form id="form-despesa" style="display:none;">
+      <div class="field">
+        <label>Data</label>
+        <input type="date" id="d-data" required>
+      </div>
+      <div class="field">
+        <label>Categoria</label>
+        <select id="d-categoria"></select>
+      </div>
+      <div id="d-nova-categoria-wrap" style="display:none;">
+        <div class="field">
+          <label>Nome da nova categoria</label>
+          <input type="text" id="d-nova-categoria" placeholder="Ex: Lavagem do carro">
+        </div>
+      </div>
+      <div class="field">
+        <label>Valor (R$)</label>
+        <input type="number" inputmode="decimal" step="0.01" id="d-valor" placeholder="0,00" required>
+      </div>
+      <div class="field">
+        <label>Observação (opcional)</label>
+        <input type="text" id="d-obs" placeholder="Ex: Posto Ipiranga">
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:6px;">Salvar despesa</button>
+    </form>
+
+    <div class="section-title">Lançamentos recentes</div>
+    <div id="recent-list"></div>
+
+  </div>
+
+  <!-- ============ SCREEN: GRÁFICOS ============ -->
+  <div class="screen" id="screen-graficos">
+
+    <div class="tabs">
+      <button class="tab active" data-gview="mensal">Mês a mês</button>
+      <button class="tab" data-gview="anual">Ano a ano</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Lucro líquido</div>
+      <div class="chart-wrap"><canvas id="chart-evolucao" height="220"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Faturamento vs Despesas</div>
+      <div class="chart-wrap"><canvas id="chart-fat-desp" height="220"></canvas></div>
+    </div>
+
+    <div class="section-title">💰 Ganho por km — por aplicativo</div>
+    <div class="card">
+      <div class="card-title">Segundo o que cada app informa</div>
+      <div class="chart-wrap"><canvas id="chart-kmapp" height="220"></canvas></div>
+      <div class="chart-legend" id="legend-kmapp"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Média geral (todos os apps)</div>
+      <div class="chart-wrap"><canvas id="chart-kmmedia" height="200"></canvas></div>
+    </div>
+
+    <div class="section-title">🛣️ Ganho por km real</div>
+    <div class="card">
+      <div class="card-title">App informado × Km real (com deslocamento)</div>
+      <div class="helper-text" style="margin-bottom:10px;">Compara o ganho/km que os apps anunciam com o ganho/km real, considerando todo o km rodado — inclusive sem passageiro.</div>
+      <div class="chart-wrap"><canvas id="chart-kmreal" height="220"></canvas></div>
+      <div class="chart-legend" id="legend-kmreal"></div>
+    </div>
+
+    <div id="empty-graficos" class="empty-state" style="display:none;">
+      <div class="ico">📈</div>
+      <div class="msg">Lance pelo menos 2 meses de dados para ver as comparações aqui.</div>
+    </div>
+
+  </div>
+
+  <!-- ============ SCREEN: CONFIG ============ -->
+  <div class="screen" id="screen-config">
+
+    <div class="section-title">📤 Exportar dados</div>
+    <div class="card">
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin:0 0 14px;">
+        Gera um arquivo .csv com todos os seus lançamentos, separado por abas equivalentes (diária, semanal, mensal, anual).
+        Abra o arquivo baixado e suba para o Google Drive — o Planilhas abre .csv automaticamente.
+      </p>
+      <button class="btn btn-primary" id="btn-export-csv">Baixar planilha (.csv)</button>
+    </div>
+
+    <div class="section-title">🗂 Categorias de despesa</div>
+    <div class="card">
+      <div id="categorias-list"></div>
+      <div class="field-row" style="margin-top:10px;">
+        <div class="field" style="margin-bottom:0;">
+          <input type="text" id="nova-cat-input" placeholder="Nova categoria">
+        </div>
+        <button class="btn btn-secondary btn-sm" style="width:auto;padding:0 16px;" id="btn-add-cat">Adicionar</button>
+      </div>
+    </div>
+
+    <div class="section-title">🚗 Aplicativos</div>
+    <div class="card">
+      <p style="font-size:12px;color:var(--text-faint);line-height:1.5;margin:0 0 10px;">
+        Desative os que você não usa para simplificar a tela de lançamento.
+      </p>
+      <div id="apps-config-list"></div>
+    </div>
+
+    <div class="section-title">⚠️ Dados</div>
+    <div class="card">
+      <div class="toggle-row" style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:0;">
+        <div>
+          <div style="font-weight:600;font-size:14px;">Backup local (.json)</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">Salva tudo num arquivo para guardar ou restaurar depois</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="btn btn-secondary btn-sm" id="btn-backup">Exportar backup</button>
+        <button class="btn btn-secondary btn-sm" id="btn-restore">Importar backup</button>
+      </div>
+      <input type="file" id="file-restore" accept=".json" style="display:none;">
+      <button class="btn btn-danger btn-sm" style="margin-top:16px;" id="btn-clear-all">Apagar todos os dados</button>
+    </div>
+
+    <p style="text-align:center;font-size:11px;color:var(--text-faint);margin-top:24px;">
+      Painel do Motorista · seus dados ficam só neste aparelho
+    </p>
+
+  </div>
+
+</div>
+
+<!-- ============ BOTTOM NAV ============ -->
+<div class="bottomnav">
+  <button class="navbtn active" data-screen="painel">
+    <svg viewBox="0 0 24 24"><path d="M3 13h4v8H3v-8zM10 9h4v12h-4V9zM17 4h4v17h-4V4z"/></svg>
+    Painel
+  </button>
+  <button class="navbtn" data-screen="lancar">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+    Lançar
+  </button>
+  <button class="navbtn" data-screen="graficos">
+    <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Gráficos
+  </button>
+  <button class="navbtn" data-screen="config">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.4-1l-.4-.1a8 8 0 0 0-.7-1.7l.3-.3a1.7 1.7 0 0 0 0-2.4 1.7 1.7 0 0 0-2.4 0l-.3.3a8 8 0 0 0-1.7-.7l-.1-.4a1.7 1.7 0 0 0-1-1.4 1.7 1.7 0 0 0-1.9.3 1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.4l-.1.4a8 8 0 0 0-1.7.7l-.3-.3a1.7 1.7 0 0 0-2.4 0 1.7 1.7 0 0 0 0 2.4l.3.3a8 8 0 0 0-.7 1.7l-.4.1a1.7 1.7 0 0 0-1.4 1 1.7 1.7 0 0 0 .3 1.9"/></svg>
+    Ajustes
+  </button>
+</div>
+
+<!-- ============ TOAST ============ -->
+<div class="toast" id="toast"></div>
+
+<!-- ============ CONFIRM SHEET ============ -->
+<div class="sheet-backdrop" id="confirm-backdrop">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="confirm-title">Confirmar</h2>
+    <p id="confirm-msg" style="color:var(--text-dim);font-size:14px;line-height:1.5;"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn btn-secondary" id="confirm-cancel">Cancelar</button>
+      <button class="btn btn-danger" id="confirm-ok">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
