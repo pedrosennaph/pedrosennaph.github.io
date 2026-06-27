@@ -258,9 +258,11 @@ function renderPainel(){
   document.getElementById('m-faturamento').textContent = brl(G.faturamento);
   document.getElementById('m-despesas').textContent = brl(D.total);
   document.getElementById('m-km').textContent = num(G.km,1) + ' km';
-  document.getElementById('m-corridas').textContent = G.corridas;
   document.getElementById('m-ganhokm').textContent = G.km > 0 ? brl(G.faturamento/G.km) : '—';
+  document.getElementById('m-corridas').textContent = G.corridas;
   document.getElementById('m-ganhohora').textContent = G.horas > 0 ? brl(G.faturamento/G.horas) : '—';
+  document.getElementById('m-kmreal').textContent = G.kmReal > 0 ? (num(G.kmReal,1) + ' km') : '— km';
+  document.getElementById('m-ganhokmreal').textContent = G.kmReal > 0 ? brl(G.faturamento/G.kmReal) : '—';
 
   drawDonut('chart-donut', [
     { label:'Lucro líquido', value: Math.max(lucro,0), color:'#5FD068' },
@@ -430,9 +432,9 @@ function drawLine(canvasId, labels, series){
     ctx.fillText('Sem dados suficientes', w/2, h/2);
     return;
   }
-  const allVals = series.flatMap(s=>s.values.map(v=>v||0));
-  const maxVal = Math.max(1, ...allVals) * 1.15;
-  const minVal = Math.min(0, ...allVals);
+  const allVals = series.flatMap(s=>s.values.filter(v=>v!==null && v!==undefined));
+  const maxVal = allVals.length ? Math.max(1, ...allVals) * 1.15 : 1;
+  const minVal = allVals.length ? Math.min(0, ...allVals) : 0;
   const range = maxVal - minVal || 1;
 
   ctx.strokeStyle = '#2E3540';
@@ -447,17 +449,22 @@ function drawLine(canvasId, labels, series){
   const yOf = v => padT + plotH - ((v-minVal)/range)*plotH;
 
   series.forEach(s => {
+    // desenha em segmentos contínuos, pulando onde o valor é null (sem dado naquele período)
+    let drawing = false;
     ctx.beginPath();
     s.values.forEach((v,i) => {
-      const x = xOf(i), y = yOf(v||0);
-      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      if(v === null || v === undefined){ drawing = false; return; }
+      const x = xOf(i), y = yOf(v);
+      if(!drawing){ ctx.moveTo(x,y); drawing = true; }
+      else ctx.lineTo(x,y);
     });
     ctx.strokeStyle = s.color;
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.stroke();
     s.values.forEach((v,i) => {
-      const x = xOf(i), y = yOf(v||0);
+      if(v === null || v === undefined) return;
+      const x = xOf(i), y = yOf(v);
       ctx.beginPath();
       ctx.arc(x,y,3.5,0,Math.PI*2);
       ctx.fillStyle = s.color;
@@ -705,7 +712,17 @@ function buildBuckets(view){
 
 function renderGraficos(){
   const buckets = buildBuckets(graficosView);
-  document.getElementById('empty-graficos').style.display = buckets.length < 2 ? 'block' : 'none';
+  const faltam = Math.max(0, 2 - buckets.length);
+  const emptyEl = document.getElementById('empty-graficos');
+  if(faltam > 0){
+    emptyEl.style.display = 'block';
+    const unidade = graficosView === 'anual' ? (faltam===1?'ano':'anos') : (faltam===1?'mês':'meses');
+    document.getElementById('empty-graficos-msg').textContent = buckets.length === 0
+      ? `Lance seu primeiro ${graficosView==='anual'?'ano':'mês'} para começar a ver os gráficos aqui.`
+      : `Você tem ${buckets.length} ${graficosView==='anual'?(buckets.length===1?'ano':'anos'):(buckets.length===1?'mês':'meses')} lançado. Faltam mais ${faltam} ${unidade} para aparecer a comparação completa.`;
+  } else {
+    emptyEl.style.display = 'none';
+  }
 
   const labels = buckets.map(b => b.label);
   const lucros = [], faturamentos = [], despesasArr = [];
@@ -746,7 +763,7 @@ function renderGraficos(){
 
   const appsAtivos = state.apps.filter(a => a.ativo);
   drawLine('chart-kmapp', labels, appsAtivos.map(a => ({
-    name: a.nome, color: a.cor, values: kmPorApp[a.id].map(v => v===null ? 0 : v)
+    name: a.nome, color: a.cor, values: kmPorApp[a.id]
   })));
   document.getElementById('legend-kmapp').innerHTML = appsAtivos.map(a =>
     `<div class="li"><span class="dot" style="background:${a.cor}"></span>${a.nome}</div>`
@@ -757,8 +774,8 @@ function renderGraficos(){
   ]);
 
   drawLine('chart-kmreal', labels, [
-    { name:'Segundo os apps', color:'#5BA7E8', values: appInformadoArr.map(v=>v===null?0:v) },
-    { name:'Km real (com deslocamento)', color:'#E8B339', values: realArr.map(v=>v===null?0:v) },
+    { name:'Segundo os apps', color:'#5BA7E8', values: appInformadoArr },
+    { name:'Km real (com deslocamento)', color:'#E8B339', values: realArr },
   ]);
   document.getElementById('legend-kmreal').innerHTML = `
     <div class="li"><span class="dot" style="background:#5BA7E8"></span>Segundo os apps</div>

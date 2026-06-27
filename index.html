@@ -58,20 +58,28 @@
         <div class="value red mono" id="m-despesas">R$ 0,00</div>
       </div>
       <div class="metric">
-        <div class="label">Km rodados</div>
+        <div class="label">Km rodados (apps)</div>
         <div class="value mono" id="m-km">0 km</div>
+      </div>
+      <div class="metric">
+        <div class="label">Ganho / km (apps)</div>
+        <div class="value gold mono" id="m-ganhokm">R$ 0,00</div>
       </div>
       <div class="metric">
         <div class="label">Corridas</div>
         <div class="value mono" id="m-corridas">0</div>
       </div>
       <div class="metric">
-        <div class="label">Ganho / km</div>
-        <div class="value gold mono" id="m-ganhokm">R$ 0,00</div>
-      </div>
-      <div class="metric">
         <div class="label">Ganho / hora</div>
         <div class="value gold mono" id="m-ganhohora">R$ 0,00</div>
+      </div>
+      <div class="metric">
+        <div class="label">Km rodados (real)</div>
+        <div class="value mono" id="m-kmreal">— km</div>
+      </div>
+      <div class="metric">
+        <div class="label">Ganho / km (real)</div>
+        <div class="value gold mono" id="m-ganhokmreal">—</div>
       </div>
     </div>
 
@@ -168,6 +176,11 @@
       <button class="tab" data-gview="anual">Ano a ano</button>
     </div>
 
+    <div id="empty-graficos" class="empty-state" style="display:none; padding: 16px 4px 22px;">
+      <div class="ico">📈</div>
+      <div class="msg" id="empty-graficos-msg">Lance pelo menos 2 meses de dados para ver as comparações aqui.</div>
+    </div>
+
     <div class="card">
       <div class="card-title">Lucro líquido</div>
       <div class="chart-wrap"><canvas id="chart-evolucao" height="220"></canvas></div>
@@ -196,11 +209,6 @@
       <div class="helper-text" style="margin-bottom:10px;">Compara o ganho/km que os apps anunciam com o ganho/km real, considerando todo o km rodado — inclusive sem passageiro.</div>
       <div class="chart-wrap"><canvas id="chart-kmreal" height="220"></canvas></div>
       <div class="chart-legend" id="legend-kmreal"></div>
-    </div>
-
-    <div id="empty-graficos" class="empty-state" style="display:none;">
-      <div class="ico">📈</div>
-      <div class="msg">Lance pelo menos 2 meses de dados para ver as comparações aqui.</div>
     </div>
 
   </div>
