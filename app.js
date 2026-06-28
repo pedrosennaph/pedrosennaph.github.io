@@ -35,7 +35,8 @@ function loadState(){
     apps: DEFAULT_APPS.map(a => ({...a})),
     categorias: [...DEFAULT_CATEGORIAS],
     ganhos: [],   // {id, data, porApp:[{appId, valor, km, corridas}], kmReal, horas}
-    despesas: [], // {id, data, categoria, valor, obs}
+    despesas: [], // {id, data, categoria, valor, obs, fixaId?}
+    despesasFixas: [], // {id, categoria, valor, descricao, mesInicio:'YYYY-MM', ativa}
   };
 }
 
@@ -44,12 +45,66 @@ function saveState(){
 }
 
 let state = loadState();
+if(!state.despesasFixas) state.despesasFixas = [];
 
 // garante que apps/categorias novos do código apareçam em dados antigos
 DEFAULT_APPS.forEach(def => {
   if(!state.apps.find(a => a.id === def.id)) state.apps.push({...def});
 });
 if(!state.categorias || !state.categorias.length) state.categorias = [...DEFAULT_CATEGORIAS];
+
+/* =========================================================
+   DESPESAS FIXAS (recorrentes): seguro, IPVA, manutenção, parcela...
+   Cadastradas uma vez, geram automaticamente um lançamento de despesa
+   em cada mês a partir do mês de início escolhido. Cada lançamento
+   gerado guarda fixaId — editar/excluir aquele mês não afeta os outros.
+   ========================================================= */
+function mesAtualStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function mesStrDe(dataISO){
+  return dataISO.slice(0,7); // 'YYYY-MM'
+}
+function listaMesesEntre(mesIni, mesFim){
+  const [yi,mi] = mesIni.split('-').map(Number);
+  const [yf,mf] = mesFim.split('-').map(Number);
+  const out = [];
+  let y = yi, m = mi;
+  while(y < yf || (y===yf && m<=mf)){
+    out.push(`${y}-${String(m).padStart(2,'0')}`);
+    m++; if(m>12){ m=1; y++; }
+  }
+  return out;
+}
+
+function materializarDespesasFixas(){
+  const hoje = mesAtualStr();
+  let mudou = false;
+  (state.despesasFixas||[]).filter(f => f.ativa).forEach(fixa => {
+    if(!fixa.mesInicio || fixa.mesInicio > hoje) return;
+    const meses = listaMesesEntre(fixa.mesInicio, hoje);
+    const existentes = new Set(
+      state.despesas.filter(d => d.fixaId === fixa.id).map(d => mesStrDe(d.data))
+    );
+    meses.forEach(mes => {
+      if(existentes.has(mes)) return;
+      // dia 1 do mês como data padrão do lançamento automático
+      const dataLanc = `${mes}-01`;
+      state.despesas.push({
+        id: uid(),
+        data: dataLanc,
+        categoria: fixa.categoria,
+        valor: fixa.valor,
+        obs: fixa.descricao || '',
+        fixaId: fixa.id,
+      });
+      mudou = true;
+    });
+  });
+  if(mudou) saveState();
+}
+materializarDespesasFixas();
 
 /* ===== Helpers de formatação ===== */
 function brl(v){
@@ -114,6 +169,7 @@ const TOPBAR_TITLES = {
 };
 
 function goToScreen(name){
+  materializarDespesasFixas();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.querySelectorAll('.navbtn').forEach(b => b.classList.toggle('active', b.dataset.screen === name));
@@ -301,11 +357,11 @@ function renderPainel(){
    MOTOR DE GRÁFICOS — canvas puro, sem libs externas
    (mantém o app 100% funcional offline depois de instalado)
    ========================================================= */
-function setupCanvas(id){
+function setupCanvas(id, forceWidth){
   const canvas = document.getElementById(id);
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
-  const cssW = rect.width || canvas.parentElement.clientWidth || 300;
+  const cssW = forceWidth || rect.width || canvas.parentElement.clientWidth || 300;
   // guarda a altura "de design" uma única vez, pois o atributo height
   // é sobrescrito abaixo (canvas buffer) e não pode ser reusado como fonte da verdade
   if(!canvas.dataset.baseHeight){
@@ -382,11 +438,27 @@ function roundRectTop(ctx, x, y, w, h, r){
   ctx.closePath();
 }
 
-function drawBars(canvasId, labels, series){
-  const { ctx, w, h } = setupCanvas(canvasId);
-  const padL = 18, padR = 18, padT = 16, padB = 28;
-  const plotW = w - padL - padR, plotH = h - padT - padB;
+function drawBars(canvasId, labels, series, opts={}){
+  const minBarW = opts.minBarW || 0;
+  const canvas = document.getElementById(canvasId);
+  const containerW = canvas.parentElement.clientWidth || 300;
   const n = labels.length;
+  const padL = 18, padR = 18;
+  let totalW = containerW;
+  if(minBarW && n > 0){
+    const neededGroupW = series.length * (minBarW + 4) + 4;
+    const neededTotalW = neededGroupW * n + padL + padR;
+    totalW = Math.max(containerW, neededTotalW);
+  }
+  // permite scroll horizontal quando o conteúdo exige mais largura que o container
+  canvas.style.minWidth = totalW + 'px';
+  const wrap = canvas.parentElement;
+  wrap.style.overflowX = totalW > containerW ? 'auto' : 'hidden';
+  wrap.style.webkitOverflowScrolling = 'touch';
+
+  const { ctx, w, h } = setupCanvas(canvasId, totalW);
+  const padT = 16, padB = 28;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
   if(n === 0){
     ctx.fillStyle = '#5B6270'; ctx.font='13px Inter'; ctx.textAlign='center';
     ctx.fillText('Sem dados suficientes', w/2, h/2);
@@ -629,17 +701,33 @@ function renderRecentList(){
           <button class="del" data-del-ganho="${item.id}">✕</button>
         </div>`;
     }
+    const isFixa = !!item.fixaId;
     return `
         <div class="entry-row">
-          <div class="icn" style="background:rgba(255,107,94,0.15);">🧾</div>
-          <div class="info">
+          <div class="icn" style="background:rgba(255,107,94,0.15);">${isFixa ? '🔁' : '🧾'}</div>
+          <div class="info" ${isFixa ? `data-edit-valor-fixa="${item.id}" style="cursor:pointer;"` : ''}>
             <div class="name">${item.categoria}</div>
-            <div class="meta">${dateLabel}${item.obs ? ' · '+item.obs : ''}</div>
+            <div class="meta">${dateLabel}${item.obs ? ' · '+item.obs : ''}${isFixa ? ' · fixa (toque para ajustar este mês)' : ''}</div>
           </div>
           <div class="amt red">-${brl(item.valor)}</div>
-          <button class="del" data-del-despesa="${item.id}">✕</button>
+          <button class="del" data-del-despesa="${item.id}" data-is-fixa="${isFixa}">✕</button>
         </div>`;
   }).join('') + `</div>`;
+
+  list.querySelectorAll('[data-edit-valor-fixa]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.editValorFixa;
+      const d = state.despesas.find(x => x.id === id);
+      const novoValor = prompt(`Novo valor para "${d.categoria}" neste mês (${parseDateLocal(d.data).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}):`, d.valor);
+      if(novoValor === null) return;
+      const v = parseFloat(String(novoValor).replace(',','.'));
+      if(isNaN(v) || v <= 0){ toast('Valor inválido'); return; }
+      d.valor = v;
+      saveState();
+      renderRecentList();
+      toast('Valor deste mês atualizado', true);
+    });
+  });
 
   list.querySelectorAll('[data-del-ganho]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -653,7 +741,10 @@ function renderRecentList(){
   list.querySelectorAll('[data-del-despesa]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.delDespesa;
-      confirmSheet('Excluir despesa', 'Remover essa despesa?', () => {
+      const isFixa = btn.dataset.isFixa === 'true';
+      confirmSheet('Excluir despesa', isFixa
+        ? 'Remove só o lançamento deste mês. A despesa fixa continua ativa e vai gerar normalmente nos próximos meses — para parar definitivamente, pause ou exclua a fixa em Ajustes.'
+        : 'Remover essa despesa?', () => {
         state.despesas = state.despesas.filter(d => d.id !== id);
         saveState(); renderRecentList(); toast('Removido');
       });
@@ -727,10 +818,15 @@ function renderGraficos(){
   const labels = buckets.map(b => b.label);
   const lucros = [], faturamentos = [], despesasArr = [];
   const kmPorApp = {};
+  const fatPorApp = {};
+  const despPorCategoria = {};
   const mediaGeral = [];
   const appInformadoArr = [], realArr = [];
 
-  state.apps.forEach(a => kmPorApp[a.id] = []);
+  state.apps.forEach(a => { kmPorApp[a.id] = []; fatPorApp[a.id] = []; });
+  // categorias presentes nos dados (não só as cadastradas), pra não perder categorias antigas removidas da lista
+  const categoriasPresentes = [...new Set(state.despesas.map(d => d.categoria))];
+  categoriasPresentes.forEach(c => despPorCategoria[c] = []);
 
   buckets.forEach(b => {
     const gl = ganhosNoPeriodo(b.start, b.end);
@@ -745,6 +841,11 @@ function renderGraficos(){
       const d = G.porApp[a.id];
       const v = d && d.km > 0 ? d.valor/d.km : null;
       kmPorApp[a.id].push(v);
+      fatPorApp[a.id].push(d ? d.valor : 0);
+    });
+
+    categoriasPresentes.forEach(c => {
+      despPorCategoria[c].push(D.porCategoria[c] || 0);
     });
 
     mediaGeral.push(G.km > 0 ? G.faturamento/G.km : null);
@@ -762,10 +863,26 @@ function renderGraficos(){
   ]);
 
   const appsAtivos = state.apps.filter(a => a.ativo);
-  drawLine('chart-kmapp', labels, appsAtivos.map(a => ({
+  drawBars('chart-fat-por-app', labels, appsAtivos.map(a => ({
+    name: a.nome, color: a.cor, values: fatPorApp[a.id]
+  })), { minBarW: 16 });
+  document.getElementById('legend-fat-por-app').innerHTML = appsAtivos.map(a =>
+    `<div class="li"><span class="dot" style="background:${a.cor}"></span>${a.nome}</div>`
+  ).join('');
+
+  const corPorCategoria = (nome) => categoriaColor(nome);
+  drawBars('chart-desp-categoria', labels, categoriasPresentes.map(c => ({
+    name: c, color: corPorCategoria(c), values: despPorCategoria[c]
+  })), { minBarW: 14 });
+  document.getElementById('legend-desp-categoria').innerHTML = categoriasPresentes.map(c =>
+    `<div class="li"><span class="dot" style="background:${corPorCategoria(c)}"></span>${c}</div>`
+  ).join('') || `<div class="li" style="color:var(--text-faint);">Nenhuma despesa lançada ainda</div>`;
+
+  const appsAtivos2 = appsAtivos; // mantém nome usado abaixo
+  drawLine('chart-kmapp', labels, appsAtivos2.map(a => ({
     name: a.nome, color: a.cor, values: kmPorApp[a.id]
   })));
-  document.getElementById('legend-kmapp').innerHTML = appsAtivos.map(a =>
+  document.getElementById('legend-kmapp').innerHTML = appsAtivos2.map(a =>
     `<div class="li"><span class="dot" style="background:${a.cor}"></span>${a.nome}</div>`
   ).join('');
 
@@ -783,10 +900,139 @@ function renderGraficos(){
   `;
 }
 
+/* Cor determinística para categorias dinâmicas de despesa, usando a mesma
+   paleta de referência do app. Atribui por ordem de cadastro (state.categorias)
+   para evitar colisões de cor entre categorias diferentes. */
+const CATEGORIA_PALETTE = ['#FF6B5E','#E8B339','#5BA7E8','#B084E8','#5FD068','#FF8FB1','#7DD3C8','#F4A261','#9D8DF1','#E07A5F'];
+function categoriaColor(nome){
+  let idx = state.categorias.indexOf(nome);
+  if(idx === -1){
+    // categoria não está mais na lista (foi removida) — usa hash como fallback estável
+    let hash = 0;
+    for(let i=0;i<nome.length;i++) hash = (hash*31 + nome.charCodeAt(i)) >>> 0;
+    idx = hash;
+  }
+  return CATEGORIA_PALETTE[idx % CATEGORIA_PALETTE.length];
+}
+
 /* =========================================================
    TELA: CONFIGURAÇÕES
    ========================================================= */
+/* =========================================================
+   DESPESAS FIXAS — UI (cadastro, lista, ativar/desativar, excluir)
+   ========================================================= */
+function mesLabel(mesStr){
+  // 'YYYY-MM' -> 'jun de 2026'
+  const [y,m] = mesStr.split('-').map(Number);
+  const d = new Date(y, m-1, 1);
+  return d.toLocaleDateString('pt-BR', { month:'long', year:'numeric' });
+}
+
+function renderFixasConfig(){
+  const wrap = document.getElementById('fixas-list');
+  if(!state.despesasFixas || state.despesasFixas.length === 0){
+    wrap.innerHTML = `<p style="font-size:13px;color:var(--text-faint);margin:4px 0;">Nenhuma despesa fixa cadastrada ainda.</p>`;
+    return;
+  }
+  wrap.innerHTML = state.despesasFixas.map(f => `
+    <div class="app-row" style="margin-bottom:10px;${f.ativa ? '' : 'opacity:0.55;'}">
+      <div class="left" style="flex:1;min-width:0;cursor:pointer;" data-edit-fixa="${f.id}">
+        <div>
+          <div class="name">${f.categoria}${f.descricao ? ' · '+f.descricao : ''}</div>
+          <div class="stat">${brl(f.valor)}/mês · desde ${mesLabel(f.mesInicio)}${f.ativa ? '' : ' · pausada'}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <div class="switch ${f.ativa?'on':''}" data-toggle-fixa="${f.id}" title="${f.ativa ? 'Pausar' : 'Reativar'}"></div>
+        <button class="del" data-del-fixa="${f.id}">✕</button>
+      </div>
+    </div>
+  `).join('');
+
+  wrap.querySelectorAll('[data-edit-fixa]').forEach(el => {
+    el.addEventListener('click', () => openFixaSheet(el.dataset.editFixa));
+  });
+  wrap.querySelectorAll('[data-toggle-fixa]').forEach(sw => {
+    sw.addEventListener('click', () => {
+      const f = state.despesasFixas.find(x => x.id === sw.dataset.toggleFixa);
+      f.ativa = !f.ativa;
+      saveState();
+      if(f.ativa) materializarDespesasFixas();
+      renderFixasConfig();
+      toast(f.ativa ? 'Despesa fixa reativada' : 'Despesa fixa pausada');
+    });
+  });
+  wrap.querySelectorAll('[data-del-fixa]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.delFixa;
+      const f = state.despesasFixas.find(x => x.id === id);
+      confirmSheet('Excluir despesa fixa', `Isso remove "${f.categoria}" da lista de fixas. Os lançamentos já gerados em meses anteriores continuam no histórico — você pode excluí-los manualmente se quiser.`, () => {
+        state.despesasFixas = state.despesasFixas.filter(x => x.id !== id);
+        saveState();
+        renderFixasConfig();
+        toast('Despesa fixa removida');
+      });
+    });
+  });
+}
+
+function openFixaSheet(id){
+  const sel = document.getElementById('fx-categoria');
+  sel.innerHTML = state.categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+  const backdrop = document.getElementById('fixa-backdrop');
+  const title = document.getElementById('fixa-sheet-title');
+
+  if(id){
+    const f = state.despesasFixas.find(x => x.id === id);
+    title.textContent = 'Editar despesa fixa';
+    document.getElementById('fx-id').value = f.id;
+    sel.value = f.categoria;
+    document.getElementById('fx-descricao').value = f.descricao || '';
+    document.getElementById('fx-valor').value = f.valor;
+    document.getElementById('fx-mes-inicio').value = f.mesInicio;
+  } else {
+    title.textContent = 'Nova despesa fixa';
+    document.getElementById('form-fixa').reset();
+    document.getElementById('fx-id').value = '';
+    document.getElementById('fx-mes-inicio').value = mesAtualStr();
+  }
+  backdrop.classList.add('open');
+}
+
+document.getElementById('btn-nova-fixa').addEventListener('click', () => openFixaSheet(null));
+document.getElementById('fixa-backdrop').addEventListener('click', (e) => {
+  if(e.target.id === 'fixa-backdrop') e.target.classList.remove('open');
+});
+
+document.getElementById('form-fixa').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = document.getElementById('fx-id').value;
+  const categoria = document.getElementById('fx-categoria').value;
+  const descricao = document.getElementById('fx-descricao').value.trim();
+  const valor = parseFloat(String(document.getElementById('fx-valor').value).replace(',','.'));
+  const mesInicio = document.getElementById('fx-mes-inicio').value;
+
+  if(!categoria || isNaN(valor) || valor <= 0 || !mesInicio){
+    toast('Confira categoria, valor e mês de início');
+    return;
+  }
+
+  if(id){
+    const f = state.despesasFixas.find(x => x.id === id);
+    f.categoria = categoria; f.descricao = descricao; f.valor = valor; f.mesInicio = mesInicio;
+  } else {
+    state.despesasFixas.push({ id: uid(), categoria, descricao, valor, mesInicio, ativa: true });
+  }
+  saveState();
+  materializarDespesasFixas();
+  document.getElementById('fixa-backdrop').classList.remove('open');
+  renderFixasConfig();
+  toast('Despesa fixa salva', true);
+});
+
 function renderConfig(){
+  renderFixasConfig();
   renderCategoriasConfig();
   renderAppsConfig();
 }

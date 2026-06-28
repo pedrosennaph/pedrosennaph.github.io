@@ -191,6 +191,21 @@
       <div class="chart-wrap"><canvas id="chart-fat-desp" height="220"></canvas></div>
     </div>
 
+    <div class="section-title">💵 Faturamento por aplicativo</div>
+    <div class="card">
+      <div class="card-title">Quanto cada app trouxe, mês a mês</div>
+      <div class="chart-wrap" style="overflow-x:auto;"><canvas id="chart-fat-por-app" height="220"></canvas></div>
+      <div class="chart-legend" id="legend-fat-por-app"></div>
+    </div>
+
+    <div class="section-title">🧾 Despesas por categoria</div>
+    <div class="card">
+      <div class="card-title">Quanto foi gasto em cada categoria, mês a mês</div>
+      <div class="helper-text" style="margin-bottom:10px;">Cada categoria (combustível, seguro, manutenção...) aparece como uma barra separada, lado a lado, para você comparar de onde vem o gasto.</div>
+      <div class="chart-wrap" style="overflow-x:auto;"><canvas id="chart-desp-categoria" height="220"></canvas></div>
+      <div class="chart-legend" id="legend-desp-categoria"></div>
+    </div>
+
     <div class="section-title">💰 Ganho por km — por aplicativo</div>
     <div class="card">
       <div class="card-title">Segundo o que cada app informa</div>
@@ -223,6 +238,16 @@
         Abra o arquivo baixado e suba para o Google Drive — o Planilhas abre .csv automaticamente.
       </p>
       <button class="btn btn-primary" id="btn-export-csv">Baixar planilha (.csv)</button>
+    </div>
+
+    <div class="section-title">🔁 Despesas fixas</div>
+    <div class="card">
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin:0 0 14px;">
+        Cadastre aqui gastos que se repetem todo mês — seguro, IPVA (dividido por mês), manutenção programada, parcela do carro.
+        A partir do mês escolhido, elas entram sozinhas no relatório, sem precisar lançar de novo. Se algum mês tiver valor diferente, edite normalmente esse lançamento na lista de "Lançamentos recentes".
+      </p>
+      <div id="fixas-list"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:12px;" id="btn-nova-fixa">+ Nova despesa fixa</button>
     </div>
 
     <div class="section-title">🗂 Categorias de despesa</div>
@@ -301,6 +326,37 @@
       <button class="btn btn-secondary" id="confirm-cancel">Cancelar</button>
       <button class="btn btn-danger" id="confirm-ok">Confirmar</button>
     </div>
+  </div>
+</div>
+
+<!-- ============ DESPESA FIXA SHEET ============ -->
+<div class="sheet-backdrop" id="fixa-backdrop">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="fixa-sheet-title">Nova despesa fixa</h2>
+    <form id="form-fixa">
+      <input type="hidden" id="fx-id">
+      <div class="field">
+        <label>Categoria</label>
+        <select id="fx-categoria"></select>
+      </div>
+      <div class="field">
+        <label>Descrição (opcional)</label>
+        <input type="text" id="fx-descricao" placeholder="Ex: Seguro Porto Seguro, parcela 4/12">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Valor mensal (R$)</label>
+          <input type="number" inputmode="decimal" step="0.01" id="fx-valor" placeholder="0,00" required>
+        </div>
+        <div class="field">
+          <label>Começa em</label>
+          <input type="month" id="fx-mes-inicio" required>
+        </div>
+      </div>
+      <p class="helper-text" style="margin-top:-4px;">Esse valor vai ser lançado automaticamente todo mês, a partir do mês escolhido. Quando quiser parar (ex: parcela acabou), é só desativar.</p>
+      <button type="submit" class="btn btn-primary" style="margin-top:6px;">Salvar despesa fixa</button>
+    </form>
   </div>
 </div>
 

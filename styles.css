@@ -314,7 +314,7 @@ a{ color: inherit; }
   background: none; border: none; color: var(--text-faint);
   padding: 4px 6px; margin-left: 4px; font-size: 18px;
 }
-.toggle-row .del{
+.toggle-row .del, .app-row .del{
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
   padding: 6px 10px; font-size: 14px; border-radius: 8px; line-height: 1;
 }
