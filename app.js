@@ -53,6 +53,47 @@ DEFAULT_APPS.forEach(def => {
 });
 if(!state.categorias || !state.categorias.length) state.categorias = [...DEFAULT_CATEGORIAS];
 
+// Adiciona dados de teste se não houver dados ainda
+if(state.ganhos.length === 0 && state.despesas.length === 0){
+  const testData = [
+    { mes: '2026-06-05', faturamento: { uber: 280, noventaenove: 150, indriver: 120 }, km: { uber: 85, noventaenove: 45, indriver: 35 }, despesasVals: { 'Combustível': 45, 'Alimentação': 25 } },
+    { mes: '2026-06-12', faturamento: { uber: 320, noventaenove: 180, indriver: 140 }, km: { uber: 95, noventaenove: 55, indriver: 42 }, despesasVals: { 'Combustível': 50, 'Manutenção': 80 } },
+    { mes: '2026-06-20', faturamento: { uber: 290, noventaenove: 160, indriver: 130 }, km: { uber: 88, noventaenove: 48, indriver: 38 }, despesasVals: { 'Combustível': 47, 'Lavagem': 30, 'Pedágio/Estacionamento': 15 } },
+    { mes: '2026-07-08', faturamento: { uber: 350, noventaenove: 200, indriver: 160 }, km: { uber: 105, noventaenove: 60, indriver: 48 }, despesasVals: { 'Combustível': 55, 'Alimentação': 30, 'Seguro': 120 } },
+    { mes: '2026-07-15', faturamento: { uber: 380, noventaenove: 220, indriver: 180 }, km: { uber: 115, noventaenove: 65, indriver: 54 }, despesasVals: { 'Combustível': 58, 'Manutenção': 100, 'Lavagem': 40 } },
+    { mes: '2026-07-22', faturamento: { uber: 310, noventaenove: 170, indriver: 150 }, km: { uber: 92, noventaenove: 52, indriver: 44 }, despesasVals: { 'Combustível': 48, 'Alimentação': 28, 'Pedágio/Estacionamento': 20 } },
+    { mes: '2026-08-05', faturamento: { uber: 330, noventaenove: 190, indriver: 155 }, km: { uber: 100, noventaenove: 57, indriver: 46 }, despesasVals: { 'Combustível': 52, 'Alimentação': 26, 'Aluguel do carro': 150 } },
+    { mes: '2026-08-14', faturamento: { uber: 395, noventaenove: 230, indriver: 190 }, km: { uber: 120, noventaenove: 70, indriver: 57 }, despesasVals: { 'Combustível': 60, 'Manutenção': 120, 'Lavagem': 35 } },
+    { mes: '2026-08-21', faturamento: { uber: 340, noventaenove: 195, indriver: 165 }, km: { uber: 103, noventaenove: 59, indriver: 49 }, despesasVals: { 'Combustível': 54, 'Alimentação': 32, 'Seguro': 120 } },
+  ];
+  
+  testData.forEach(d => {
+    state.ganhos.push({
+      id: uid(),
+      data: d.mes,
+      porApp: [
+        { appId: 'uber', valor: d.faturamento.uber, km: d.km.uber, corridas: Math.floor(d.km.uber / 8) },
+        { appId: 'noventaenove', valor: d.faturamento.noventaenove, km: d.km.noventaenove, corridas: Math.floor(d.km.noventaenove / 7) },
+        { appId: 'indriver', valor: d.faturamento.indriver, km: d.km.indriver, corridas: Math.floor(d.km.indriver / 6) }
+      ],
+      kmReal: Math.round((d.km.uber + d.km.noventaenove + d.km.indriver) * 1.1),
+      horas: 8
+    });
+    
+    Object.entries(d.despesasVals).forEach(([cat, val]) => {
+      state.despesas.push({
+        id: uid(),
+        data: d.mes,
+        categoria: cat,
+        valor: val,
+        obs: ''
+      });
+    });
+  });
+  
+  saveState();
+}
+
 /* =========================================================
    DESPESAS FIXAS (recorrentes): seguro, IPVA, manutenção, parcela...
    Cadastradas uma vez, geram automaticamente um lançamento de despesa
@@ -79,11 +120,24 @@ function listaMesesEntre(mesIni, mesFim){
 }
 
 function materializarDespesasFixas(){
+  // limite = o mês civil atual, OU o mês mais recente com algum ganho/despesa
+  // já lançado, o que for mais distante no futuro. Isso garante que despesas
+  // fixas continuem aparecendo mesmo em meses lançados adiantados (ex: usuário
+  // já registrou julho antes do mês civil virar julho).
   const hoje = mesAtualStr();
+  const todasDatas = [
+    ...state.ganhos.map(g => g.data),
+    ...state.despesas.map(d => d.data),
+  ];
+  const mesMaisRecenteComDado = todasDatas.length
+    ? todasDatas.map(mesStrDe).sort().slice(-1)[0]
+    : hoje;
+  const limite = mesMaisRecenteComDado > hoje ? mesMaisRecenteComDado : hoje;
+
   let mudou = false;
   (state.despesasFixas||[]).filter(f => f.ativa).forEach(fixa => {
-    if(!fixa.mesInicio || fixa.mesInicio > hoje) return;
-    const meses = listaMesesEntre(fixa.mesInicio, hoje);
+    if(!fixa.mesInicio || fixa.mesInicio > limite) return;
+    const meses = listaMesesEntre(fixa.mesInicio, limite);
     const existentes = new Set(
       state.despesas.filter(d => d.fixaId === fixa.id).map(d => mesStrDe(d.data))
     );
@@ -438,23 +492,127 @@ function roundRectTop(ctx, x, y, w, h, r){
   ctx.closePath();
 }
 
+// Armazena informações dos retângulos das barras para hover
+let barsData = {};
+
+function attachBarHoverListener(canvasId){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+
+  // Remover listener anterior se existir
+  if(canvas._hoverListener) canvas.removeEventListener('mousemove', canvas._hoverListener);
+  
+  // Adicionar novo listener
+  canvas._hoverListener = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const cssX = e.clientX - rect.left;
+    const cssY = e.clientY - rect.top;
+    
+    let hoveredBar = null;
+    for(let bar of (barsData[canvasId]||[])){
+      if(cssX >= bar.x && cssX <= bar.x + bar.w &&
+         cssY >= bar.y && cssY <= bar.y + bar.h){
+        hoveredBar = bar;
+        break;
+      }
+    }
+    
+    // Atualizar cursor e tooltip
+    if(hoveredBar){
+      canvas.style.cursor = 'pointer';
+      showBarTooltip(hoveredBar, rect.left + hoveredBar.x + hoveredBar.w/2, rect.top + hoveredBar.y - 10);
+    } else {
+      canvas.style.cursor = 'default';
+      hideBarTooltip();
+    }
+  };
+  
+  canvas.addEventListener('mousemove', canvas._hoverListener);
+  
+  // Esconder tooltip ao sair do canvas
+  const hideOnLeave = () => hideBarTooltip();
+  if(canvas._leaveListener) canvas.removeEventListener('mouseleave', canvas._leaveListener);
+  canvas._leaveListener = hideOnLeave;
+  canvas.addEventListener('mouseleave', hideOnLeave);
+}
+
+let tooltipEl = null;
+
+function showBarTooltip(bar, x, y){
+  if(!tooltipEl){
+    tooltipEl = document.createElement('div');
+    tooltipEl.style.cssText = `
+      position: fixed;
+      background: rgba(0,0,0,0.9);
+      color: #EDEFF2;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      pointer-events: none;
+      z-index: 9999;
+      white-space: nowrap;
+      font-family: 'Inter', sans-serif;
+    `;
+    document.body.appendChild(tooltipEl);
+  }
+  
+  tooltipEl.textContent = `${bar.seriesName}: ${brl(bar.value)}`;
+  tooltipEl.style.left = (x - tooltipEl.offsetWidth/2) + 'px';
+  tooltipEl.style.top = (y - 30) + 'px';
+  tooltipEl.style.display = 'block';
+}
+
+function hideBarTooltip(){
+  if(tooltipEl) tooltipEl.style.display = 'none';
+}
+
 function drawBars(canvasId, labels, series, opts={}){
   const minBarW = opts.minBarW || 0;
+  const barGap = 3;
+  const groupGap = opts.groupGap != null ? opts.groupGap : 6; // espaço extra entre um mês e outro
   const canvas = document.getElementById(canvasId);
   const containerW = canvas.parentElement.clientWidth || 300;
   const n = labels.length;
-  const padL = 18, padR = 18;
+  const padL = 65, padR = 18;
+
+  // conta, por mês, quantas séries têm valor > 0 — usado para largura adaptativa de grupo
+  const seriesAtivasPorMes = [];
+  for(let i=0;i<n;i++){
+    const ativas = series.filter(s => (s.values[i]||0) > 0).length;
+    seriesAtivasPorMes.push(Math.max(1, ativas));
+  }
+
+  // largura de cada grupo (mês): proporcional ao nº de séries ativas naquele mês,
+  // quando adaptiveGroupWidth está ativo; senão, largura fixa para todos os meses (nº total de séries)
+  function groupWidthFor(i){
+    const nSeries = opts.adaptiveGroupWidth ? seriesAtivasPorMes[i] : series.length;
+    return nSeries * (minBarW + barGap) + barGap;
+  }
+
   let totalW = containerW;
   if(minBarW && n > 0){
-    const neededGroupW = series.length * (minBarW + 4) + 4;
-    const neededTotalW = neededGroupW * n + padL + padR;
+    const somaGrupos = labels.reduce((sum,_,i) => sum + groupWidthFor(i), 0);
+    const neededTotalW = somaGrupos + groupGap * Math.max(0,n-1) + padL + padR;
     totalW = Math.max(containerW, neededTotalW);
   }
   // permite scroll horizontal quando o conteúdo exige mais largura que o container
   canvas.style.minWidth = totalW + 'px';
   const wrap = canvas.parentElement;
-  wrap.style.overflowX = totalW > containerW ? 'auto' : 'hidden';
+  const temScroll = totalW > containerW;
+  const hintEl = document.getElementById('hint-' + canvasId.replace('chart-',''));
+  wrap.style.overflowX = temScroll ? 'auto' : 'hidden';
   wrap.style.webkitOverflowScrolling = 'touch';
+  wrap.classList.toggle('has-scroll', temScroll);
+  if(hintEl) hintEl.style.display = temScroll ? 'flex' : 'none';
+  if(temScroll && !wrap._scrollHintBound){
+    wrap._scrollHintBound = true;
+    wrap.addEventListener('scroll', () => {
+      const atEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 4;
+      wrap.classList.toggle('has-scroll', !atEnd);
+      if(hintEl) hintEl.style.display = atEnd ? 'none' : 'flex';
+    });
+  }
 
   const { ctx, w, h } = setupCanvas(canvasId, totalW);
   const padT = 16, padB = 28;
@@ -465,20 +623,46 @@ function drawBars(canvasId, labels, series, opts={}){
     return;
   }
   const maxVal = Math.max(1, ...series.flatMap(s=>s.values.map(v=>v||0))) * 1.15;
-  const groupW = plotW / n;
-  const barGap = 4;
-  const barW = (groupW - barGap*(series.length+1)) / series.length;
 
+  // posição x inicial de cada grupo (mês), acumulando larguras variáveis + gap entre grupos
+  const groupX = [];
+  {
+    let cursor = padL;
+    for(let i=0;i<n;i++){
+      groupX.push(cursor);
+      cursor += groupWidthFor(i) + groupGap;
+    }
+  }
+
+  // Y-axis grid and labels
   ctx.strokeStyle = '#2E3540';
   ctx.lineWidth = 1;
+  ctx.fillStyle = '#8B93A1';
+  ctx.font = '10px Inter';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for(let gi=0; gi<=4; gi++){
+    const val = (maxVal * gi / 4);
+    const gy = padT + plotH * (1 - gi/4);
+    ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+plotW,gy); ctx.stroke();
+    ctx.fillText(brl(val), padL-8, gy);
+  }
+
   ctx.beginPath();
   ctx.moveTo(padL, padT+plotH);
   ctx.lineTo(padL+plotW, padT+plotH);
   ctx.stroke();
 
+  // limpa registro de hover deste canvas antes de redesenhar
+  barsData[canvasId] = [];
+
   labels.forEach((lab, i) => {
-    const gx = padL + i*groupW;
-    series.forEach((s, si) => {
+    const gx = groupX[i];
+    const thisGroupW = groupWidthFor(i);
+    const seriesComValor = opts.adaptiveGroupWidth ? series.filter(s => (s.values[i]||0) > 0) : series;
+    const barW = (thisGroupW - barGap*(seriesComValor.length+1)) / Math.max(1,seriesComValor.length);
+
+    seriesComValor.forEach((s, si) => {
       const v = s.values[i] || 0;
       const bh = (v/maxVal) * plotH;
       const bx = gx + barGap + si*(barW+barGap);
@@ -486,17 +670,39 @@ function drawBars(canvasId, labels, series, opts={}){
       ctx.fillStyle = s.color;
       roundRectTop(ctx, bx, by, barW, bh, 4);
       ctx.fill();
+
+      barsData[canvasId].push({
+        x: bx, y: by, w: barW, h: bh,
+        value: v, seriesName: s.name, label: lab, color: s.color
+      });
+
+      // porcentagem em relação ao faturamento do mês, fixa em cima da barra
+      if(opts.faturamentoRef && !s.skipPct){
+        const fatMes = opts.faturamentoRef[i] || 0;
+        if(fatMes > 0 && v > 0){
+          const pct = (v / fatMes) * 100;
+          ctx.fillStyle = '#EDEFF2';
+          ctx.font = '600 9px Inter';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(`${num(pct,0)}%`, bx + barW/2, by - 3);
+        }
+      }
     });
     ctx.fillStyle = '#8B93A1';
     ctx.font = '11px Inter';
     ctx.textAlign = 'center';
-    ctx.fillText(lab, gx + groupW/2, h - 10);
+    ctx.textBaseline = 'top';
+    ctx.fillText(lab, gx + thisGroupW/2, h - 10);
   });
+  
+  // Ativa o listener de hover usando os dados já calculados acima (sem recalcular posições)
+  attachBarHoverListener(canvasId);
 }
 
 function drawLine(canvasId, labels, series){
   const { ctx, w, h } = setupCanvas(canvasId);
-  const padL = 18, padR = 18, padT = 16, padB = 28;
+  const padL = 45, padR = 18, padT = 16, padB = 28;
   const plotW = w - padL - padR, plotH = h - padT - padB;
   const n = labels.length;
   if(n === 0){
@@ -509,11 +715,18 @@ function drawLine(canvasId, labels, series){
   const minVal = allVals.length ? Math.min(0, ...allVals) : 0;
   const range = maxVal - minVal || 1;
 
+  // Y-axis grid and labels
   ctx.strokeStyle = '#2E3540';
   ctx.lineWidth = 1;
-  for(let gi=0; gi<=2; gi++){
-    const gy = padT + plotH*gi/2;
+  ctx.fillStyle = '#8B93A1';
+  ctx.font = '10px Inter';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for(let gi=0; gi<=4; gi++){
+    const val = minVal + (range * gi / 4);
+    const gy = padT + plotH - plotH*gi/4;
     ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+plotW,gy); ctx.stroke();
+    ctx.fillText(brl(val), padL-8, gy);
   }
 
   const stepX = n > 1 ? plotW/(n-1) : 0;
@@ -541,12 +754,19 @@ function drawLine(canvasId, labels, series){
       ctx.arc(x,y,3.5,0,Math.PI*2);
       ctx.fillStyle = s.color;
       ctx.fill();
+      // valor do ponto
+      ctx.fillStyle = '#EDEFF2';
+      ctx.font = '9px Inter';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(brl(v), x, y-6);
     });
   });
 
   ctx.fillStyle = '#8B93A1';
   ctx.font = '10.5px Inter';
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
   labels.forEach((lab,i) => {
     if(n > 8 && i % Math.ceil(n/8) !== 0 && i !== n-1) return;
     ctx.fillText(lab, xOf(i), h-10);
@@ -784,10 +1004,10 @@ function buildBuckets(view){
 
   const sorted = allDates.slice().sort();
   const firstD = parseDateLocal(sorted[0]);
-  const now = new Date();
+  const lastD = parseDateLocal(sorted[sorted.length-1]);
   const buckets = [];
   let cursor = new Date(firstD.getFullYear(), firstD.getMonth(), 1);
-  const last = new Date(now.getFullYear(), now.getMonth(), 1);
+  const last = new Date(lastD.getFullYear(), lastD.getMonth(), 1);
   while(cursor <= last){
     const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
     const end = new Date(cursor.getFullYear(), cursor.getMonth()+1, 0, 23,59,59);
@@ -858,14 +1078,14 @@ function renderGraficos(){
   ]);
 
   drawBars('chart-fat-desp', labels, [
-    { name:'Faturamento', color:'#5FD068', values: faturamentos },
+    { name:'Faturamento', color:'#5FD068', values: faturamentos, skipPct: true },
     { name:'Despesas', color:'#FF6B5E', values: despesasArr },
-  ]);
+  ], { minBarW: 19, faturamentoRef: faturamentos });
 
   const appsAtivos = state.apps.filter(a => a.ativo);
   drawBars('chart-fat-por-app', labels, appsAtivos.map(a => ({
     name: a.nome, color: a.cor, values: fatPorApp[a.id]
-  })), { minBarW: 16 });
+  })), { minBarW: 19, faturamentoRef: faturamentos });
   document.getElementById('legend-fat-por-app').innerHTML = appsAtivos.map(a =>
     `<div class="li"><span class="dot" style="background:${a.cor}"></span>${a.nome}</div>`
   ).join('');
@@ -873,7 +1093,7 @@ function renderGraficos(){
   const corPorCategoria = (nome) => categoriaColor(nome);
   drawBars('chart-desp-categoria', labels, categoriasPresentes.map(c => ({
     name: c, color: corPorCategoria(c), values: despPorCategoria[c]
-  })), { minBarW: 14 });
+  })), { minBarW: 19, faturamentoRef: faturamentos, adaptiveGroupWidth: true, groupGap: 6 });
   document.getElementById('legend-desp-categoria').innerHTML = categoriasPresentes.map(c =>
     `<div class="li"><span class="dot" style="background:${corPorCategoria(c)}"></span>${c}</div>`
   ).join('') || `<div class="li" style="color:var(--text-faint);">Nenhuma despesa lançada ainda</div>`;
@@ -888,7 +1108,7 @@ function renderGraficos(){
 
   drawBars('chart-kmmedia', labels, [
     { name:'Ganho/km médio', color:'#E8B339', values: mediaGeral.map(v=>v===null?0:v) }
-  ]);
+  ], { minBarW: 19 });
 
   drawLine('chart-kmreal', labels, [
     { name:'Segundo os apps', color:'#5BA7E8', values: appInformadoArr },

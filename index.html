@@ -194,7 +194,11 @@
     <div class="section-title">💵 Faturamento por aplicativo</div>
     <div class="card">
       <div class="card-title">Quanto cada app trouxe, mês a mês</div>
-      <div class="chart-wrap" style="overflow-x:auto;"><canvas id="chart-fat-por-app" height="220"></canvas></div>
+      <div class="chart-wrap" id="wrap-fat-por-app" style="overflow-x:auto;"><canvas id="chart-fat-por-app" height="220"></canvas></div>
+      <div class="chart-scroll-hint" id="hint-fat-por-app" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        arraste para o lado para ver mais meses
+      </div>
       <div class="chart-legend" id="legend-fat-por-app"></div>
     </div>
 
@@ -202,7 +206,11 @@
     <div class="card">
       <div class="card-title">Quanto foi gasto em cada categoria, mês a mês</div>
       <div class="helper-text" style="margin-bottom:10px;">Cada categoria (combustível, seguro, manutenção...) aparece como uma barra separada, lado a lado, para você comparar de onde vem o gasto.</div>
-      <div class="chart-wrap" style="overflow-x:auto;"><canvas id="chart-desp-categoria" height="220"></canvas></div>
+      <div class="chart-wrap" id="wrap-desp-categoria" style="overflow-x:auto;"><canvas id="chart-desp-categoria" height="220"></canvas></div>
+      <div class="chart-scroll-hint" id="hint-desp-categoria" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        arraste para o lado para ver mais meses
+      </div>
       <div class="chart-legend" id="legend-desp-categoria"></div>
     </div>
 

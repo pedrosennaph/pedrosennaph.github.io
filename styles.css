@@ -411,6 +411,26 @@ a{ color: inherit; }
   width: 100%;
   position: relative;
 }
+.chart-wrap.has-scroll::after{
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 28px;
+  width: 28px;
+  background: linear-gradient(90deg, transparent, var(--surface) 75%);
+  pointer-events: none;
+  border-radius: 0 var(--radius-lg) 0 0;
+}
+.chart-scroll-hint{
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.chart-scroll-hint svg{ width: 12px; height: 12px; }
 .chart-legend{
   display: flex;
   flex-wrap: wrap;
