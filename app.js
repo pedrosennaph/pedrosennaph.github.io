@@ -702,7 +702,7 @@ function drawBars(canvasId, labels, series, opts={}){
 
 function drawLine(canvasId, labels, series){
   const { ctx, w, h } = setupCanvas(canvasId);
-  const padL = 45, padR = 18, padT = 16, padB = 28;
+  const padL = 65, padR = 18, padT = 16, padB = 28;
   const plotW = w - padL - padR, plotH = h - padT - padB;
   const n = labels.length;
   if(n === 0){
