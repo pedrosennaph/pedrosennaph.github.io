@@ -701,6 +701,15 @@ function drawBars(canvasId, labels, series, opts={}){
 }
 
 function drawLine(canvasId, labels, series){
+  // Gráfico de linha nunca precisa de scroll — reseta qualquer expansão deixada por drawBars
+  const lineCanvas = document.getElementById(canvasId);
+  lineCanvas.style.minWidth = '';
+  const lineWrap = lineCanvas.parentElement;
+  lineWrap.style.overflowX = 'hidden';
+  lineWrap.classList.remove('has-scroll');
+  const hintEl = document.getElementById('hint-' + canvasId.replace('chart-',''));
+  if(hintEl) hintEl.style.display = 'none';
+
   const { ctx, w, h } = setupCanvas(canvasId);
   const padL = 65, padR = 18, padT = 16, padB = 28;
   const plotW = w - padL - padR, plotH = h - padT - padB;
