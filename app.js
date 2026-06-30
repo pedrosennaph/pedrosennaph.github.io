@@ -53,46 +53,7 @@ DEFAULT_APPS.forEach(def => {
 });
 if(!state.categorias || !state.categorias.length) state.categorias = [...DEFAULT_CATEGORIAS];
 
-// Adiciona dados de teste se não houver dados ainda
-if(state.ganhos.length === 0 && state.despesas.length === 0){
-  const testData = [
-    { mes: '2026-06-05', faturamento: { uber: 280, noventaenove: 150, indriver: 120 }, km: { uber: 85, noventaenove: 45, indriver: 35 }, despesasVals: { 'Combustível': 45, 'Alimentação': 25 } },
-    { mes: '2026-06-12', faturamento: { uber: 320, noventaenove: 180, indriver: 140 }, km: { uber: 95, noventaenove: 55, indriver: 42 }, despesasVals: { 'Combustível': 50, 'Manutenção': 80 } },
-    { mes: '2026-06-20', faturamento: { uber: 290, noventaenove: 160, indriver: 130 }, km: { uber: 88, noventaenove: 48, indriver: 38 }, despesasVals: { 'Combustível': 47, 'Lavagem': 30, 'Pedágio/Estacionamento': 15 } },
-    { mes: '2026-07-08', faturamento: { uber: 350, noventaenove: 200, indriver: 160 }, km: { uber: 105, noventaenove: 60, indriver: 48 }, despesasVals: { 'Combustível': 55, 'Alimentação': 30, 'Seguro': 120 } },
-    { mes: '2026-07-15', faturamento: { uber: 380, noventaenove: 220, indriver: 180 }, km: { uber: 115, noventaenove: 65, indriver: 54 }, despesasVals: { 'Combustível': 58, 'Manutenção': 100, 'Lavagem': 40 } },
-    { mes: '2026-07-22', faturamento: { uber: 310, noventaenove: 170, indriver: 150 }, km: { uber: 92, noventaenove: 52, indriver: 44 }, despesasVals: { 'Combustível': 48, 'Alimentação': 28, 'Pedágio/Estacionamento': 20 } },
-    { mes: '2026-08-05', faturamento: { uber: 330, noventaenove: 190, indriver: 155 }, km: { uber: 100, noventaenove: 57, indriver: 46 }, despesasVals: { 'Combustível': 52, 'Alimentação': 26, 'Aluguel do carro': 150 } },
-    { mes: '2026-08-14', faturamento: { uber: 395, noventaenove: 230, indriver: 190 }, km: { uber: 120, noventaenove: 70, indriver: 57 }, despesasVals: { 'Combustível': 60, 'Manutenção': 120, 'Lavagem': 35 } },
-    { mes: '2026-08-21', faturamento: { uber: 340, noventaenove: 195, indriver: 165 }, km: { uber: 103, noventaenove: 59, indriver: 49 }, despesasVals: { 'Combustível': 54, 'Alimentação': 32, 'Seguro': 120 } },
-  ];
-  
-  testData.forEach(d => {
-    state.ganhos.push({
-      id: uid(),
-      data: d.mes,
-      porApp: [
-        { appId: 'uber', valor: d.faturamento.uber, km: d.km.uber, corridas: Math.floor(d.km.uber / 8) },
-        { appId: 'noventaenove', valor: d.faturamento.noventaenove, km: d.km.noventaenove, corridas: Math.floor(d.km.noventaenove / 7) },
-        { appId: 'indriver', valor: d.faturamento.indriver, km: d.km.indriver, corridas: Math.floor(d.km.indriver / 6) }
-      ],
-      kmReal: Math.round((d.km.uber + d.km.noventaenove + d.km.indriver) * 1.1),
-      horas: 8
-    });
-    
-    Object.entries(d.despesasVals).forEach(([cat, val]) => {
-      state.despesas.push({
-        id: uid(),
-        data: d.mes,
-        categoria: cat,
-        valor: val,
-        obs: ''
-      });
-    });
-  });
-  
-  saveState();
-}
+// (sem seed de dados de teste — o app inicia zerado, pronto para o usuário lançar)
 
 /* =========================================================
    DESPESAS FIXAS (recorrentes): seguro, IPVA, manutenção, parcela...
